@@ -171,10 +171,13 @@ QTreeWidgetItem *WidgetSizesParser::CreateTreeItem(QTreeWidgetItem *parent, Item
 			? ""
 			: QLocale().formattedDataSize(item->size);
 
-	QTreeWidgetItem *treeItem = new QTreeWidgetItem(QStringList()
-													<< item->m_info.fileName()
-													<< sizeStr
-													);
+	QString name = item->m_info.fileName();
+	QStringList vals = MyQString::QStringListSized(2);
+	if(name.isEmpty()) vals[0] = item->m_info.filePath();
+	else vals[0] = std::move(name);
+	vals[1] = sizeStr;
+
+	QTreeWidgetItem *treeItem = new QTreeWidgetItem(vals);
 
 	// Связываем item с treeItem через пользовательские данные
 	QVariant ptrVariant = QVariant::fromValue<void*>(item);
