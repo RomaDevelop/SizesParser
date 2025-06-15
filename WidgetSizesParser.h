@@ -41,6 +41,7 @@ class WidgetSizesParser : public QWidget
 
 public:
 	WidgetSizesParser(QWidget *parent = nullptr);
+	void CreateContextMenu();
 	~WidgetSizesParser();
 
 	QTreeWidget *tree;

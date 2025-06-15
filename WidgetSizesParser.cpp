@@ -16,6 +16,7 @@
 #include "MyQString.h"
 #include "MyQFileDir.h"
 #include "MyQDialogs.h"
+#include "MyQExecute.h"
 
 WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	: QWidget(parent)
@@ -118,7 +119,36 @@ WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 		}
 	});
 
+	CreateContextMenu();
+
 	resize(900,700);
+}
+
+void WidgetSizesParser::CreateContextMenu()
+{
+	tree->setContextMenuPolicy(Qt::CustomContextMenu);
+
+	connect(tree, &QTreeWidget::customContextMenuRequested,
+			this, [this](const QPoint &pos) {
+		QTreeWidgetItem* item = tree->itemAt(pos);
+		if (!item) return;
+
+		QMenu *menu=new QMenu(this);
+
+		QAction* mOpen = menu->addAction("Open");
+		QAction* mShowInExplorer = menu->addAction("Show in explorer");
+
+		connect(mOpen, &QAction::triggered, [item](){
+			if(QFileInfo(item->data(1, Qt::UserRole).toString()).isDir())
+				MyQExecute::OpenDir(item->data(1, Qt::UserRole).toString());
+			else MyQExecute::Execute(item->data(1, Qt::UserRole).toString());
+		});
+		connect(mShowInExplorer, &QAction::triggered, [item](){
+			MyQExecute::ShowInExplorer(item->data(1, Qt::UserRole).toString());
+		});
+
+		menu->exec(tree->viewport()->mapToGlobal(pos));
+	});
 }
 
 WidgetSizesParser::~WidgetSizesParser()
@@ -149,6 +179,8 @@ QTreeWidgetItem *WidgetSizesParser::CreateTreeItem(QTreeWidgetItem *parent, Item
 	// Связываем item с treeItem через пользовательские данные
 	QVariant ptrVariant = QVariant::fromValue<void*>(item);
 	treeItem->setData(0, Qt::UserRole, ptrVariant);
+
+	treeItem->setData(1, Qt::UserRole, QVariant(item->m_info.filePath()));
 
 	if (!item->subitems.empty()) {
 		// Добавим фиктивного ребенка, чтобы появился значок раскрытия
