@@ -1,6 +1,9 @@
 #ifndef WIDGETSIZESPARSER_H
 #define WIDGETSIZESPARSER_H
 
+#include <memory>
+
+#include <QTextStream>
 #include <QWidget>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -8,16 +11,27 @@
 #include <QFileInfo>
 #include <QLabel>
 
+struct Item;
+
+using ItemUptr = std::unique_ptr<Item>;
+
 struct Item
 {
-	QFileInfo m_info;
+	QString itemPathWithName;
+	QString itemNameNoPath;
 	qint64 size = -1;
 	int depth = 0;
-	std::vector<Item> subitems;
+	std::vector<ItemUptr> subitems;
+	Item *parent = nullptr;
 
 	Item() {}
 	Item(QFileInfo &&info, int deps_) { InitAndScan(std::move(info), deps_); }
 	void InitAndScan(QFileInfo &&info, int deps_);
+	std::vector<Item*> ItemsList() const;
+	void ItemsList(std::vector<Item*> &vect) const;
+
+	void SaveItem(QTextStream &stream, bool deep) const;
+	QString LoadItem(const QString &line);
 
 	void PrintProgress(int n, int total, const QFileInfo &childFI);
 
@@ -25,6 +39,7 @@ struct Item
 	inline static QLabel *progress3;
 	inline static QLabel *progress2_2;
 	inline static QLabel *progress3_2;
+	inline static QPushButton *btnPause;
 
 	inline static Item DoCompleteScan(QString path);
 	inline static void Abort() { abort=true; }
@@ -34,6 +49,10 @@ struct Item
 	inline static QStringList seroSize;
 	inline static QStringList minusSize;
 };
+
+inline QString Compare(const Item &l, const Item &r);
+inline bool operator== (const Item &l, const Item &r);
+inline bool operator!= (const Item &l, const Item &r);
 
 class WidgetSizesParser : public QWidget
 {
@@ -50,8 +69,12 @@ public:
 	void SlotScan();
 
 	Item scannedItems;
+	void SaveItems(const Item &items);
+	void LoadItems();
+	void CheckItems();
 
 	QTreeWidgetItem* CreateTreeItem(QTreeWidgetItem *parent, Item *item);
+
 };
 
 #endif // WIDGETSIZESPARSER_H
