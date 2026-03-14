@@ -327,7 +327,9 @@ QTreeWidgetItem *WidgetSizesParser::CreateTreeItem(QTreeWidgetItem *parent, Item
 
 void Item::InitAndScan(QFileInfo &&info, int deps_)
 {
-	while(pause and !abort) { Item::btnPause->setText("Continue"); MyCppDifferent::sleep_ms(10); QCoreApplication::processEvents(); }
+#define PAUSE { Item::btnPause->setText("Continue"); MyCppDifferent::sleep_ms(10); QCoreApplication::processEvents(); }
+
+	while(pause and !abort) PAUSE
 	Item::btnPause->setText("Pause");
 	if(abort) { return; }
 
@@ -338,6 +340,7 @@ void Item::InitAndScan(QFileInfo &&info, int deps_)
 
 	itemPathWithName = info.filePath();
 	itemNameNoPath = info.fileName();
+	if(itemNameNoPath.isEmpty() and info.isRoot()) itemNameNoPath = itemPathWithName;
 
 	if (!info.isDir()) // если это не каталог
 	{
@@ -362,7 +365,7 @@ void Item::InitAndScan(QFileInfo &&info, int deps_)
 
 		PrintProgress(i, entriesCount, entriesFI[i]);
 
-		while(pause and !abort) { Item::btnPause->setText("Continue"); MyCppDifferent::sleep_ms(10); QCoreApplication::processEvents(); }
+		while(pause and !abort) PAUSE
 		Item::btnPause->setText("Pause");
 		if(abort) { return; }
 
@@ -414,13 +417,17 @@ QString Item::LoadItem(const QString &line)
 
 void Item::PrintProgress(int n, int total, const QFileInfo &childFI)
 {
+	static bool scanningWholeDrive = false;
 	if(depth == 1) {
 		progress2->setText("Обработано " + QSn(n) + " из " + QSn(total));
 		progress2_2->setText(itemPathWithName);
+		if(itemPathWithName.endsWith("/")) scanningWholeDrive = true;
+		else scanningWholeDrive = false;
 	}
 	if(depth == 2){
 		progress3->setText(":  " + QSn(n) + " из " + QSn(total));
-		progress3_2->setText("    /    "+itemNameNoPath + "    /    " + childFI.fileName());
+		if(scanningWholeDrive) progress3_2->setText("    "+itemNameNoPath + "    /    " + childFI.fileName());
+		else progress3_2->setText("    /    "+itemNameNoPath + "    /    " + childFI.fileName());
 	}
 
 	QCoreApplication::processEvents();
