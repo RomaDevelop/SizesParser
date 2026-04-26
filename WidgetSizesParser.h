@@ -36,10 +36,12 @@ struct Item
 
 	void PrintProgress(int n, int total, const QFileInfo &childFI);
 
+	inline static int progressRootDepth = 1;
 	inline static QLabel *progress2;
 	inline static QLabel *progress3;
 	inline static QLabel *progress2_2;
 	inline static QLabel *progress3_2;
+
 	inline static QPushButton *btnPause;
 
 	inline static Item DoCompleteScan(QString path);
@@ -81,6 +83,9 @@ public:
 	bool RemoveItem(Item *itemToRemove);
 
 	QString dirSavedScans;
+
+protected:
+	void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif // WIDGETSIZESPARSER_H

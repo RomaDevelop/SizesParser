@@ -13,6 +13,8 @@
 #include <QVBoxLayout>
 #include <QProgressDialog>
 #include <QLabel>
+#include <QResizeEvent>
+#include <QSizePolicy>
 
 #include <functional>
 
@@ -28,6 +30,7 @@
 #include "WidgetSizesParser.h"
 
 QString settingsFile;
+int maxWidth;
 
 WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	: QWidget(parent)
@@ -128,10 +131,17 @@ WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	CreateContextMenu();
 
 	resize(900,700);
+	maxWidth = width()/2;
 
 	settingsFile = MyQDifferent::PathToExe()+"/files/settings.ini";
 	QSettings settings(settingsFile, QSettings::IniFormat);
 	dirSavedScans = settings.value("dirSavedScans").toString();
+}
+
+void WidgetSizesParser::resizeEvent(QResizeEvent *event)
+{
+	QWidget::resizeEvent(event);
+	maxWidth = width();
 }
 
 void WidgetSizesParser::CreateContextMenu()
@@ -358,6 +368,7 @@ void WidgetSizesParser::RecheckTreeItem(QTreeWidgetItem *treeItem)
 		return;
 	}
 
+	Item::progressRootDepth = item->depth;
 	Item updatedItem(QFileInfo(path), item->depth - 1);
 	const QString diff = Compare(*item, updatedItem);
 	if(diff.isEmpty())
@@ -558,16 +569,18 @@ QString Item::LoadItem(const QString &line)
 void Item::PrintProgress(int n, int total, const QFileInfo &childFI)
 {
 	static bool scanningWholeDrive = false;
-	if(depth == 1) {
+	if(depth == progressRootDepth) {
 		progress2->setText("Обработано " + QSn(n) + " из " + QSn(total));
-		progress2_2->setText(itemPathWithName);
+		progress2_2->setText(progress2_2->fontMetrics().elidedText(itemPathWithName, Qt::ElideMiddle, maxWidth));
 		if(itemPathWithName.endsWith("/")) scanningWholeDrive = true;
 		else scanningWholeDrive = false;
 	}
-	if(depth == 2){
+	if(depth == progressRootDepth + 1){
 		progress3->setText(":  " + QSn(n) + " из " + QSn(total));
-		if(scanningWholeDrive) progress3_2->setText("    "+itemNameNoPath + "    /    " + childFI.fileName());
-		else progress3_2->setText("    /    "+itemNameNoPath + "    /    " + childFI.fileName());
+		if(scanningWholeDrive) progress3_2->setText(progress3_2->fontMetrics().elidedText(
+					"    "+itemNameNoPath + "    /    " + childFI.fileName(), Qt::ElideMiddle, maxWidth));
+		else progress3_2->setText(progress3_2->fontMetrics().elidedText(
+					"    /    "+itemNameNoPath + "    /    " + childFI.fileName(), Qt::ElideMiddle, maxWidth));
 	}
 
 	QCoreApplication::processEvents();
@@ -578,6 +591,7 @@ Item Item::DoCompleteScan(QString path)
 	abort = false;
 	pause = false;
 	Item::btnPause->setText("Pause");
+	progressRootDepth = 1;
 	seroSize.clear();
 	minusSize.clear();
 	symLinkWorked.clear();
