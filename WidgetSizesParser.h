@@ -37,6 +37,7 @@ struct Item
 	void PrintProgress(int n, int total, const QFileInfo &childFI);
 
 	inline static int progressRootDepth = 1;
+	inline static int progressMaxWidth;
 	inline static QLabel *progress2;
 	inline static QLabel *progress3;
 	inline static QLabel *progress2_2;
