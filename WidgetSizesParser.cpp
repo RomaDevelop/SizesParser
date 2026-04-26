@@ -131,7 +131,7 @@ WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	CreateContextMenu();
 
 	resize(900,700);
-	maxWidth = width()/2;
+	maxWidth = width();
 
 	settingsFile = MyQDifferent::PathToExe()+"/files/settings.ini";
 	QSettings settings(settingsFile, QSettings::IniFormat);
@@ -571,16 +571,16 @@ void Item::PrintProgress(int n, int total, const QFileInfo &childFI)
 	static bool scanningWholeDrive = false;
 	if(depth == progressRootDepth) {
 		progress2->setText("Обработано " + QSn(n) + " из " + QSn(total));
-		progress2_2->setText(progress2_2->fontMetrics().elidedText(itemPathWithName, Qt::ElideMiddle, maxWidth));
+		progress2_2->setText(progress2_2->fontMetrics().elidedText(itemPathWithName, Qt::ElideRight, maxWidth/3));
 		if(itemPathWithName.endsWith("/")) scanningWholeDrive = true;
 		else scanningWholeDrive = false;
 	}
 	if(depth == progressRootDepth + 1){
 		progress3->setText(":  " + QSn(n) + " из " + QSn(total));
 		if(scanningWholeDrive) progress3_2->setText(progress3_2->fontMetrics().elidedText(
-					"    "+itemNameNoPath + "    /    " + childFI.fileName(), Qt::ElideMiddle, maxWidth));
+					"    "+itemNameNoPath + "    /    " + childFI.fileName(), Qt::ElideRight, maxWidth/3));
 		else progress3_2->setText(progress3_2->fontMetrics().elidedText(
-					"    /    "+itemNameNoPath + "    /    " + childFI.fileName(), Qt::ElideMiddle, maxWidth));
+					"    /    "+itemNameNoPath + "    /    " + childFI.fileName(), Qt::ElideRight, maxWidth/3));
 	}
 
 	QCoreApplication::processEvents();
