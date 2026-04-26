@@ -5,6 +5,7 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QDir>
+#include <QSettings>
 #include <QTimer>
 #include <QFileDialog>
 #include <QGridLayout>
@@ -13,14 +14,20 @@
 #include <QProgressDialog>
 #include <QLabel>
 
+#include <functional>
+
 #include "MyCppDifferent.h"
 #include "MyQDifferent.h"
 #include "MyQString.h"
 #include "MyQFileDir.h"
 #include "MyQDialogs.h"
 #include "MyQExecute.h"
+#include "WidgetSizesParser.h"
 
 #include "Code.h"
+#include "WidgetSizesParser.h"
+
+QString settingsFile;
 
 WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	: QWidget(parent)
@@ -57,8 +64,10 @@ WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	QPushButton *btnShowWarnings = new QPushButton(" Show warnings ");
 	hlo1->addWidget(btnShowWarnings);
 	connect(btnShowWarnings, &QPushButton::clicked, [](){
-		MyQDialogs::ShowText("Warnings: has sizes 0 or -1: "+
-							 Item::seroSize.join("\n") + "\n" + Item::minusSize.join("\n"));
+		MyQDialogs::ShowText("Warnings: has sizes 0 or -1: "
+							 + Item::seroSize.join("\n")
+							 + "\n\n" + Item::minusSize.join("\n")
+							 + "\n\n" + Item::symLinkWorked.join("\n"));
 	});
 
 	hlo1->addStretch();
@@ -119,6 +128,10 @@ WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	CreateContextMenu();
 
 	resize(900,700);
+
+	settingsFile = MyQDifferent::PathToExe()+"/files/settings.ini";
+	QSettings settings(settingsFile, QSettings::IniFormat);
+	dirSavedScans = settings.value("dirSavedScans").toString();
 }
 
 void WidgetSizesParser::CreateContextMenu()
@@ -134,6 +147,7 @@ void WidgetSizesParser::CreateContextMenu()
 
 		QAction* mOpen = menu->addAction("Open");
 		QAction* mShowInExplorer = menu->addAction("Show in explorer");
+		QAction* mRecheck = menu->addAction("Reparse");
 
 		connect(mOpen, &QAction::triggered, [item](){
 			if(QFileInfo(item->data(1, Qt::UserRole).toString()).isDir())
@@ -143,6 +157,9 @@ void WidgetSizesParser::CreateContextMenu()
 		connect(mShowInExplorer, &QAction::triggered, [item](){
 			MyQExecute::ShowInExplorer(item->data(1, Qt::UserRole).toString());
 		});
+		connect(mRecheck, &QAction::triggered, this, [this, item](){
+			RecheckTreeItem(item);
+		});
 
 		menu->exec(tree->viewport()->mapToGlobal(pos));
 	});
@@ -150,13 +167,17 @@ void WidgetSizesParser::CreateContextMenu()
 
 WidgetSizesParser::~WidgetSizesParser()
 {
+	QSettings settings(settingsFile, QSettings::IniFormat);
+	settings.setValue("dirSavedScans", dirSavedScans);
 }
 
 void WidgetSizesParser::SlotScan()
 {
-	if(!QFileInfo(lePathToScan->text()).isDir()) { QMbError("not dir"); return; }
+	QString path = lePathToScan->text();
+	if(!QFileInfo(path).isDir()) { QMbError("not dir"); return; }
 
-	scannedItems = Item::DoCompleteScan(lePathToScan->text());
+	if(QFileInfo(path).isSymLink()) { QMbError("Target is sym link"); return; }
+	scannedItems = Item::DoCompleteScan(path);
 
 	tree->clear();
 	CreateTreeItem(nullptr, &scannedItems);
@@ -164,8 +185,9 @@ void WidgetSizesParser::SlotScan()
 
 void WidgetSizesParser::SaveItems(const Item &items)
 {
-	auto file = QFileDialog::getSaveFileName(this, "Select file", "", "*.txt");
+	auto file = QFileDialog::getSaveFileName(this, "Select file", dirSavedScans, "*.txt");
 	if(file.isEmpty()) return;
+	dirSavedScans = QFileInfo(file).path();
 
 	QFile qfile(file);
 	if(!qfile.open(QFile::WriteOnly))
@@ -201,8 +223,9 @@ void WidgetSizesParser::SaveItems(const Item &items)
 
 void WidgetSizesParser::LoadItems()
 {
-	auto fileName = QFileDialog::getOpenFileName(this, "Select file", "", "*.txt");
+	auto fileName = QFileDialog::getOpenFileName(this, "Select file", dirSavedScans, "*.txt");
 	if (fileName.isEmpty()) return;
+	dirSavedScans = QFileInfo(fileName).path();
 
 	QFile qfile(fileName);
 	if (!qfile.open(QFile::ReadOnly)) {
@@ -269,6 +292,7 @@ void WidgetSizesParser::LoadItems()
 
 		// 4. Добавление элемента
 		stack.back()->subitems.emplace_back(std::make_unique<Item>(std::move(newItem)));
+		stack.back()->subitems.back()->parent = stack.back();
 		// Кладем указатель на только что добавленный элемент в стек
 		stack.push_back(stack.back()->subitems.back().get());
 	}
@@ -294,6 +318,60 @@ void WidgetSizesParser::CheckItems()
 			SaveItems(alternalScannedItems);
 		}
 	}
+}
+
+void WidgetSizesParser::RecheckTreeItem(QTreeWidgetItem *treeItem)
+{
+	if(!treeItem)
+		return;
+
+	auto *item = static_cast<Item*>(treeItem->data(0, Qt::UserRole).value<void*>());
+	if(!item)
+	{
+		QMbError("Не удалось получить элемент для перепроверки");
+		return;
+	}
+
+	const QString path = item->itemPathWithName;
+	const QFileInfo info(path);
+
+	if(!info.exists())
+	{
+		auto answer = QMessageBox::question(this, "", "Перепроверяемый элемент не существует. Удалить его из списка?");
+		if(answer != QMessageBox::Yes)
+			return;
+
+		if(treeItem == tree->topLevelItem(0))
+		{
+			scannedItems = Item();
+			tree->clear();
+			return;
+		}
+
+		if(!RemoveItem(item))
+		{
+			QMbError("Не удалось удалить элемент из списка");
+			return;
+		}
+
+		delete treeItem;
+		return;
+	}
+
+	Item updatedItem(QFileInfo(path), item->depth - 1);
+	const QString diff = Compare(*item, updatedItem);
+	if(diff.isEmpty())
+	{
+		QMbInfo("Отличий не обнаружено");
+		return;
+	}
+
+	auto answer = QMessageBox::question(this, "", "Обнаружено несовпадение. Обновить элемент?");
+	if(answer != QMessageBox::Yes)
+		return;
+
+	item->InitFromItem(std::move(updatedItem), false);
+	UpdateTreeItemView(treeItem, item);
 }
 
 QTreeWidgetItem *WidgetSizesParser::CreateTreeItem(QTreeWidgetItem *parent, Item *item)
@@ -325,22 +403,80 @@ QTreeWidgetItem *WidgetSizesParser::CreateTreeItem(QTreeWidgetItem *parent, Item
 	return treeItem;
 }
 
+void WidgetSizesParser::UpdateTreeItemView(QTreeWidgetItem *treeItem, Item *item)
+{
+	if(!treeItem || !item)
+		return;
+
+	QString sizeStr = item->size == -1
+			? ""
+			: QLocale().formattedDataSize(item->size);
+
+	treeItem->setText(0, item->itemNameNoPath);
+	treeItem->setText(1, sizeStr);
+	treeItem->setData(0, Qt::UserRole, QVariant::fromValue<void*>(item));
+	treeItem->setData(1, Qt::UserRole, QVariant(item->itemPathWithName));
+
+	treeItem->takeChildren();
+	if(!item->subitems.empty())
+		treeItem->addChild(new QTreeWidgetItem(QStringList() << "(загрузка...)"));
+}
+
+bool WidgetSizesParser::RemoveItem(Item *itemToRemove)
+{
+	if(!itemToRemove)
+		return false;
+
+	std::function<bool(Item&)> removeFrom = [&](Item &parentItem)
+	{
+		for(auto it = parentItem.subitems.begin(); it != parentItem.subitems.end(); ++it)
+		{
+			if(it->get() == itemToRemove)
+			{
+				parentItem.subitems.erase(it);
+				return true;
+			}
+
+			if(removeFrom(*it->get()))
+				return true;
+		}
+
+		return false;
+	};
+
+	return removeFrom(scannedItems);
+}
+
+void Item::InitFromItem(Item && srcItem, bool setParentFromSrc)
+{
+	itemPathWithName = std::move(srcItem.itemPathWithName);
+	itemNameNoPath = std::move(srcItem.itemNameNoPath);
+	size = srcItem.size;
+	depth = srcItem.depth;
+	subitems = std::move(srcItem.subitems);
+	for(auto &subitem : subitems)
+	{
+		subitem->parent = this;
+	}
+	if(setParentFromSrc) parent = srcItem.parent;
+}
+
 void Item::InitAndScan(QFileInfo &&info, int deps_)
 {
 #define PAUSE { Item::btnPause->setText("Continue"); MyCppDifferent::sleep_ms(10); QCoreApplication::processEvents(); }
 
 	while(pause and !abort) PAUSE
-	Item::btnPause->setText("Pause");
+			Item::btnPause->setText("Pause");
 	if(abort) { return; }
 
 	depth = deps_+1;
 	size = info.isDir() ? -1 : info.size();
 
-	if(info.isSymLink()) { return; }
-
 	itemPathWithName = info.filePath();
 	itemNameNoPath = info.fileName();
 	if(itemNameNoPath.isEmpty() and info.isRoot()) itemNameNoPath = itemPathWithName;
+
+	if(info.isSymLink()) { symLinkWorked += "sym link " + itemPathWithName; return; }
 
 	if (!info.isDir()) // если это не каталог
 	{
@@ -369,8 +505,12 @@ void Item::InitAndScan(QFileInfo &&info, int deps_)
 		Item::btnPause->setText("Pause");
 		if(abort) { return; }
 
-		subitems.emplace_back(std::make_unique<Item>(std::move(entriesFI[i]), depth));
-		size += subitems.back()->size;
+		if(not entriesFI[i].isSymLink())
+		{
+			subitems.emplace_back(std::make_unique<Item>(std::move(entriesFI[i]), depth));
+			subitems.back()->parent = this;
+			size += subitems.back()->size;
+		}
 
 		PrintProgress(i+1, entriesCount, entriesFI[i]);
 	}
@@ -440,6 +580,7 @@ Item Item::DoCompleteScan(QString path)
 	Item::btnPause->setText("Pause");
 	seroSize.clear();
 	minusSize.clear();
+	symLinkWorked.clear();
 
 	Item result(QFileInfo(path), 0);
 

@@ -26,6 +26,7 @@ struct Item
 
 	Item() {}
 	Item(QFileInfo &&info, int deps_) { InitAndScan(std::move(info), deps_); }
+	void InitFromItem(Item &&srcItem, bool setParentFromSrc);
 	void InitAndScan(QFileInfo &&info, int deps_);
 	std::vector<Item*> ItemsList() const;
 	void ItemsList(std::vector<Item*> &vect) const;
@@ -48,6 +49,7 @@ struct Item
 	inline static bool abort = false;
 	inline static QStringList seroSize;
 	inline static QStringList minusSize;
+	inline static QStringList symLinkWorked;
 };
 
 inline QString Compare(const Item &l, const Item &r);
@@ -74,7 +76,11 @@ public:
 	void CheckItems();
 
 	QTreeWidgetItem* CreateTreeItem(QTreeWidgetItem *parent, Item *item);
+	void RecheckTreeItem(QTreeWidgetItem *treeItem);
+	void UpdateTreeItemView(QTreeWidgetItem *treeItem, Item *item);
+	bool RemoveItem(Item *itemToRemove);
 
+	QString dirSavedScans;
 };
 
 #endif // WIDGETSIZESPARSER_H
