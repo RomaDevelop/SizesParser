@@ -57,7 +57,7 @@ WidgetSizesParser::WidgetSizesParser(QWidget *parent)
 	QPushButton *btnShowWarnings = new QPushButton(" Show warnings ");
 	hlo1->addWidget(btnShowWarnings);
 	connect(btnShowWarnings, &QPushButton::clicked, [](){
-		MyQDialogs::ShowText("Warnings: has sizes 0 or -1: "+
+		MyQDialogs::ShowText("", "Warnings: has sizes 0 or -1: "+
 							 Item::seroSize.join("\n") + "\n" + Item::minusSize.join("\n"));
 	});
 
