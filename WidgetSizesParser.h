@@ -26,6 +26,7 @@ struct Item
 
 	Item() {}
 	Item(QFileInfo &&info, int deps_) { InitAndScan(std::move(info), deps_); }
+	void InitFromItem(Item &&srcItem, bool setParentFromSrc);
 	void InitAndScan(QFileInfo &&info, int deps_);
 	std::vector<Item*> ItemsList() const;
 	void ItemsList(std::vector<Item*> &vect) const;
@@ -35,10 +36,13 @@ struct Item
 
 	void PrintProgress(int n, int total, const QFileInfo &childFI);
 
+	inline static int progressRootDepth = 1;
+	inline static int progressMaxWidth;
 	inline static QLabel *progress2;
 	inline static QLabel *progress3;
 	inline static QLabel *progress2_2;
 	inline static QLabel *progress3_2;
+
 	inline static QPushButton *btnPause;
 
 	inline static Item DoCompleteScan(QString path);
@@ -48,6 +52,7 @@ struct Item
 	inline static bool abort = false;
 	inline static QStringList seroSize;
 	inline static QStringList minusSize;
+	inline static QStringList symLinkWorked;
 };
 
 inline QString Compare(const Item &l, const Item &r);
@@ -74,7 +79,14 @@ public:
 	void CheckItems();
 
 	QTreeWidgetItem* CreateTreeItem(QTreeWidgetItem *parent, Item *item);
+	void RecheckTreeItem(QTreeWidgetItem *treeItem);
+	void UpdateTreeItemView(QTreeWidgetItem *treeItem, Item *item);
+	bool RemoveItem(Item *itemToRemove);
 
+	QString dirSavedScans;
+
+protected:
+	void resizeEvent(QResizeEvent *event) override;
 };
 
 #endif // WIDGETSIZESPARSER_H
